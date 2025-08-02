@@ -17,7 +17,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          # Prefer released versions or test a matrix of supported ones
+          python-version: |
+            3.11
+            3.12
 
       - name: Install uv
         uses: astral-sh/setup-uv@v2
