@@ -21,12 +21,13 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v2
+        with:
+          cache: true   # enables automatic actions/cache reuse
 
       - name: Install dev dependencies with uv
         working-directory: api-server
         run: |
           uv sync --group dev
-
       - name: Run tests with pytest
         working-directory: api-server
         run: |
