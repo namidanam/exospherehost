@@ -1,0 +1,33 @@
+name: Python API Server Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'   
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+
+      - name: Install dev dependencies with uv
+        working-directory: api-server
+        run: |
+          uv sync --group dev
+
+      - name: Run tests with pytest
+        working-directory: api-server
+        run: |
+          uv run pytest --maxfail=1 --disable-warnings -v
