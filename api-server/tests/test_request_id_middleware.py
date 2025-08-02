@@ -20,7 +20,9 @@ def test_generates_uuid_when_missing(client):
     resp = client.get("/test")
     assert resp.status_code == 200
     rid = resp.headers["x-exosphere-request-id"]
-    uuid.UUID(rid)
+    # Validate that a proper UUID was generated
+    parsed_uuid = uuid.UUID(rid)
+    assert str(parsed_uuid) == rid
     assert resp.json() == {"msg": "ok"}
 
 def test_preserves_valid_id(client):
