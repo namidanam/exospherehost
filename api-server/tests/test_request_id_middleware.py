@@ -36,4 +36,6 @@ def test_replaces_invalid_id(client):
     assert resp.status_code == 200
     new_id = resp.headers["x-exosphere-request-id"]
     assert new_id != "bad-id"
-    uuid.UUID(new_id)
+    # Validate that a proper UUID was generated
+    parsed_uuid = uuid.UUID(new_id)
+    assert str(parsed_uuid) == new_id
