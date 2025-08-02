@@ -16,7 +16,15 @@ dependencies = [
     "structlog>=25.4.0",
     "uvicorn>=0.35.0",
     "redis[hiredis]>=6.0.0",
-     "pytest>=8.0.0"
+dependencies = [
+    "redis[hiredis]>=6.0.0"
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.2",
+    "pytest>=8.0.0",
+]
 ]
 
 [dependency-groups]
