@@ -19,6 +19,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,31 +27,29 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # Prefer released versions or test a matrix of supported ones
-          python-version: "3.12"
-            
-            
+          python-version: '3.12'
 
       - name: Install uv
         uses: astral-sh/setup-uv@v2
         with:
-          enable-cache: true   # enables automatic actions/cache reuse
+          cache: true
 
       - name: Install dev dependencies with uv
         working-directory: api-server
         run: |
           uv sync --group dev
+
       - name: Run tests with pytest and coverage
         working-directory: api-server
         run: |
-          uv run pytest --cov=app --cov-report=xml --cov-report=term-missing -v -q --junitxml=pytest-report.xml
-          - name: Upload coverage reports to Codecov
-  uses: codecov/codecov-action@v5
-  with:
-    token: ${{ secrets.CODECOV_TOKEN }}
-    slug: exospherehost/exospherehost
-    files: api-server/coverage.xml
-    flags: unittests
-    name: codecov-coverage-report
-    fail_ci_if_error: true
+          uv run pytest --cov=app --cov-report=xml --cov-report=term-missing -v --junitxml=pytest-report.xml
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: exospherehost/exospherehost
+          files: api-server/coverage.xml
+          flags: unittests
+          name: codecov-coverage-report
+          fail_ci_if_error: true
