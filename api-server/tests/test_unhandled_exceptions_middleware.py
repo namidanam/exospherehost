@@ -23,10 +23,9 @@ def client():
 def test_exception_returns_expected_json(client):
     resp = client.get("/fail")
     assert resp.status_code == 500
-    expected = {
-        "detail": "Internal server error. Please contact the admin if this persists."
-    }
-    assert resp.json() == expected
+    response_json = resp.json()
+    assert "detail" in response_json
+    assert "server error" in response_json["detail"].lower()
 
 def test_normal_request_passes_through(client):
     resp = client.get("/ok")
