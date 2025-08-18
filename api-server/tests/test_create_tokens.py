@@ -13,6 +13,8 @@ from app.user.models.verification_status_enum import VerificationStatusEnum
 @pytest.mark.asyncio
 async def test_create_token_success(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    # Patch the module variable directly
+    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -87,19 +89,23 @@ async def test_create_token_invalid_credential(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["INACTIVE", "BLOCKED"])
-async def test_create_token_inactive_blocked_user(monkeypatch, status):
+@pytest.mark.parametrize("status_value", ["INACTIVE", "BLOCKED"])
+async def test_create_token_inactive_blocked_user(monkeypatch, status_value):
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
         name = "John"
         type = "admin"
         verification_status = VerificationStatusEnum.VERIFIED.value
-        status = status
+        def __init__(self, status):
+            self.status = status
         def verify_credential(self, cred):
             return True
 
     async def mock_find_one(_query):
-        return DummyUser()
+        return DummyUser(status_value)
 
     class MockUser:
         identifier = "identifier"
@@ -117,6 +123,9 @@ async def test_create_token_inactive_blocked_user(monkeypatch, status):
 
 @pytest.mark.asyncio
 async def test_create_token_unverified_user(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
         name = "John"
@@ -145,7 +154,8 @@ async def test_create_token_unverified_user(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_token_missing_jwt_secret(monkeypatch):
-    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    # Patch the module variable directly to None
+    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", None)
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
