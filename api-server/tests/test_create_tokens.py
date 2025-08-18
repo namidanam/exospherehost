@@ -2,8 +2,9 @@ import os
 import jwt
 import pytest
 from starlette.responses import JSONResponse
+from bson.errors import InvalidId
 
-from app.auth.controllers.create_token import create_token, JWT_SECRET_KEY, JWT_ALGORITHM
+from app.auth.controllers.create_token import create_token, JWT_ALGORITHM
 from app.auth.models.token_request import TokenRequest
 from app.auth.models.token_response import TokenResponse
 from app.user.models.user_status_enum import UserStatusEnum
