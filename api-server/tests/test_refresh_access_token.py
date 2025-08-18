@@ -111,4 +111,5 @@ async def test_refresh_access_token_project_no_privilege(monkeypatch, dummy_user
     res = await refresh_access_token(req, "req-id")
     assert isinstance(res, JSONResponse)
     assert res.status_code == 403
-    assert "does not have access" in res.body.decode().lower()    assert "internal server error" in res.body.decode().lower()
+    assert "does not have access" in res.body.decode().lower()    
+    assert "internal server error" in res.body.decode().lower()
