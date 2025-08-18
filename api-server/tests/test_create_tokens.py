@@ -67,10 +67,8 @@ async def test_create_token_invalid_user(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_invalid_credential(monkeypatch, dummy_user_cls):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    class DummyUser(dummy_user_cls()):
-        def verify_credential(self, cred):
-            return False
-    user = DummyUser()
+    user = dummy_user_cls()
+    user.verify_credential = lambda cred: False  # override method for this instance
     patch_user_find_one(monkeypatch, user)
     req = TokenRequest(identifier="user", credential="wrong", project=None, satellites=None)
     res = await create_token(req, "req-id")
