@@ -70,28 +70,22 @@ async def refresh_access_token(
                 status_code=403,
                 content={"success": False, "detail": "User account is inactive or blocked"}
             )
-        previlage = None
-        project_id = payload.get("project")
-        if project_id:
-            try:
-                project = await Project.get(ObjectId(project_id))
-            except InvalidId:
-                logger.error("Invalid project id", x_exosphere_request_id=x_exosphere_request_id)
-                return JSONResponse(status_code=400, content={"success": False, "detail": "Invalid project id"})
-            if not project:
-                logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
-                return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
-            logger.info("Project found", x_exosphere_request_id=x_exosphere_request_id)
-            if project.super_admin.ref.id == user.id:
-                previlage = "super_admin"
+        project = await Project.get(ObjectId(payload.get("project"))) if payload.get("project") else None
+        if not project:
+            logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
+            return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
+
+        privilege = None
+        if project.super_admin.ref.id == user.id:
+            privilege = "super_admin"
         else:
-            for project_user in project.users:
-                if project_user.user.ref.id == user.id:
-                    previlage = project_user.permission.value
+            for project_user in getattr(project, "users", []):
+                if getattr(getattr(project_user, "user", None), "ref", None) and getattr(project_user.user.ref, "id", None) == user.id:
+                    privilege = getattr(project_user, "permission", None)
                     break
-            if not previlage:
-                logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
-                return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
+        if not privilege:
+            logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
+            return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         # Create new access token with fresh user data
         token_claims = TokenClaims(
             user_id=str(user.id),
@@ -99,8 +93,8 @@ async def refresh_access_token(
             user_type=user.type,
             verification_status=user.verification_status,
             status=status_value,
-            project=project_id,  
-            previlage=previlage,  
+            project=payload.get("project"),  
+            previlage=privilege,  
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
