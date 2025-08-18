@@ -1,9 +1,10 @@
 import types
+import pytest
 import os
 import jwt
-import pytest
 import datetime
 from starlette.responses import JSONResponse
+from bson.errors import InvalidId
 
 from app.auth.controllers.refresh_access_token import (
     refresh_access_token,
@@ -119,34 +120,24 @@ async def test_refresh_access_token_inactive_blocked_user(monkeypatch, dummy_use
 
 
 @pytest.mark.asyncio
-async def test_refresh_access_token_invalid_project_id(monkeypatch):
+async def test_refresh_access_token_invalid_project_id(monkeypatch, dummy_user_cls):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
-
-    class DummyUser:
-        id = "507f1f77bcf86cd799439011"
-        name = "John"
-        type = "admin"
-        verification_status = VerificationStatusEnum.VERIFIED.value
-        status = UserStatusEnum.ACTIVE.value
-
-    class MockUser:
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    class MockProject:
         @staticmethod
         async def get(_id):
-            return DummyUser()
-
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.User", MockUser)
-
+            raise InvalidId("bad id")
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
     payload = {
-        "user_id": "507f1f77bcf86cd799439011",
+        "user_id": user.id,
         "token_type": TokenType.refresh.value,
-        "project": "not-an-oid",
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
+        "project": "badid",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
     }
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
     req = RefreshTokenRequest(refresh_token=token)
     res = await refresh_access_token(req, "req-id")
-
     assert isinstance(res, JSONResponse)
     assert res.status_code == 400
     assert "invalid project id" in res.body.decode().lower()
@@ -189,8 +180,9 @@ async def test_refresh_access_token_project_no_privilege(monkeypatch, dummy_user
             return DummyProject()
     monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
     payload = {
-        "user_id": "507f1f77bcf86cd799439011",
+        "user_id": user.id,
         "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
         "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
     }
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)

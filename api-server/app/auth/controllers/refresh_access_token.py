@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from starlette.responses import JSONResponse
 from bson import ObjectId
 from typing import Union
-from bson.errors import InvalidId
+
 
 from ..models.refresh_token_request import RefreshTokenRequest
 from ..models.token_response import TokenResponse
