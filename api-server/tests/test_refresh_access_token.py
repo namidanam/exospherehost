@@ -12,6 +12,7 @@ from app.auth.controllers.refresh_access_token import (
 from app.auth.models.refresh_token_request import RefreshTokenRequest
 from app.auth.models.token_response import TokenResponse
 from app.auth.models.token_type_enum import TokenType
+from app.user.models.user_status_enum import UserStatusEnum
 from app.user.models.verification_status_enum import VerificationStatusEnum
 
 
