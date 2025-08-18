@@ -1,16 +1,14 @@
-name: Build & publish to PyPI
+name: Python SDK Tests
 
 on:
-  push: 
-    branches:
-      - main
+  push:
+    branches: [main]
     paths:
-      - "python-sdk/exospherehost/_version.py"
-      - ".github/workflows/publish-python-sdk.yml"
-
-permissions:
-  contents: read
-  id-token: write
+      - 'python-sdk/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'python-sdk/**'
 
 jobs:
   test:
@@ -61,24 +59,3 @@ jobs:
           name: python-sdk-test-results
           path: python-sdk/pytest-report.xml
           retention-days: 30
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: test
-    defaults:
-      run:
-        working-directory: python-sdk
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v6
-        name: Install uv
-
-      - run: uv python install
-     
-      - run: uv sync --locked --dev
-
-      - run: uv build
-
-      - run: uv publish
