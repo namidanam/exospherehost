@@ -15,7 +15,6 @@ from app.user.models.user_database_model import User
 from app.user.models.user_status_enum import UserStatusEnum
 from app.project.models.project_database_model import Project
 
-
 logger = LogsManager().get_logger()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -24,6 +23,9 @@ if not JWT_SECRET_KEY:
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
+
+# List of user statuses that are denied access for refresh
+DENIED_USER_STATUSES = ["INACTIVE", "BLOCKED"]
 
 async def refresh_access_token(
     request: RefreshTokenRequest, 
@@ -47,9 +49,7 @@ async def refresh_access_token(
                 content={"detail": "Invalid token type"}
             )
         
-
-        
-        # Get user and check if blacklisted
+        # Get user and check if denied
         user = await User.get(ObjectId(payload["user_id"]))
         
         if not user:
@@ -58,8 +58,9 @@ async def refresh_access_token(
                 content={"detail": "User not found"}
             )
             
-        # Check if user is blacklisted
-        if user.status != UserStatusEnum.ACTIVE:
+        # Deny users with statuses in DENIED_USER_STATUSES
+        status_value = getattr(getattr(user, "status", None), "value", getattr(user, "status", None))
+        if status_value in DENIED_USER_STATUSES:
             logger.warning(
                 f"Inactive or blocked user attempted token refresh: {user.id}",
                 x_exosphere_request_id=x_exosphere_request_id
@@ -71,23 +72,17 @@ async def refresh_access_token(
         previlage = None
         project_id = payload.get("project")
         if project_id:
-
             project = await Project.get(ObjectId(project_id))
-
             if not project:
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
-            
             logger.info("Project found", x_exosphere_request_id=x_exosphere_request_id)
-
             if project.super_admin.ref.id == user.id:
                 previlage = "super_admin"
-
             for project_user in project.users:
                 if project_user.user.ref.id == user.id:
                     previlage = project_user.permission.value
                     break
-
             if not previlage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
@@ -97,7 +92,7 @@ async def refresh_access_token(
             user_name=user.name,
             user_type=user.type,
             verification_status=user.verification_status,
-            status=user.status,
+            status=status_value,
             project=project_id,  
             previlage=previlage,  
             satellites=payload.get("satellites"),
@@ -127,4 +122,3 @@ async def refresh_access_token(
             error=e, 
             x_exosphere_request_id=x_exosphere_request_id
         )
-        raise e
