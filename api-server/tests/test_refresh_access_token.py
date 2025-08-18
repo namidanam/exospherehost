@@ -49,7 +49,7 @@ async def test_refresh_access_token_success(monkeypatch):
     res = await refresh_access_token(req, "req-id")
 
     assert isinstance(res, TokenResponse)
-    decoded = jwt.decode(res.access_token, os.getenv("JWT_SECRET_KEY"), algorithms=[JWT_ALGORITHM])
+    decoded = jwt.decode(res.access_token, "test_secret", algorithms=[JWT_ALGORITHM])
     assert decoded["user_id"] == "507f1f77bcf86cd799439011"
     assert decoded["token_type"] == "access"
 
@@ -57,6 +57,7 @@ async def test_refresh_access_token_success(monkeypatch):
 @pytest.mark.asyncio
 async def test_refresh_access_token_invalid_token(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
 
     bad_token = jwt.encode({"token_type": "wrong"}, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
     req = RefreshTokenRequest(refresh_token=bad_token)
@@ -64,11 +65,13 @@ async def test_refresh_access_token_invalid_token(monkeypatch):
 
     assert isinstance(res, JSONResponse)
     assert res.status_code == 401
+    assert "invalid token type" in res.body.decode().lower()
 
 
 @pytest.mark.asyncio
 async def test_refresh_access_token_expired(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
 
     expired_time = int((datetime.datetime.now() - datetime.timedelta(seconds=10)).timestamp())
     payload = {
@@ -95,7 +98,7 @@ async def test_refresh_access_token_expired(monkeypatch):
 @pytest.mark.asyncio
 async def test_refresh_access_token_user_not_found(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
     class MockUser:
         @staticmethod
         async def get(_id):
@@ -151,6 +154,38 @@ async def test_refresh_access_token_inactive_blocked_user(monkeypatch, status):
     assert res.status_code == 403
     assert "inactive or blocked" in res.body.decode().lower()
 
+@pytest.mark.asyncio
+async def test_refresh_access_token_invalid_project_id(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
+
+    class DummyUser:
+        id = "507f1f77bcf86cd799439011"
+        name = "John"
+        type = "admin"
+        verification_status = VerificationStatusEnum.VERIFIED.value
+        status = UserStatusEnum.ACTIVE.value
+
+    class MockUser:
+        @staticmethod
+        async def get(_id):
+            return DummyUser()
+
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.User", MockUser)
+
+    payload = {
+        "user_id": "507f1f77bcf86cd799439011",
+        "token_type": TokenType.refresh.value,
+        "project": "not-an-oid",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
+    }
+    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 400
+    assert "invalid project id" in res.body.decode().lower()
 
 @pytest.mark.asyncio
 async def test_refresh_access_token_project_not_found(monkeypatch):
@@ -194,6 +229,7 @@ async def test_refresh_access_token_project_not_found(monkeypatch):
 @pytest.mark.asyncio
 async def test_refresh_access_token_project_no_privilege(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", "test_secret", raising=False)
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -242,7 +278,7 @@ async def test_refresh_access_token_unhandled_exception(monkeypatch):
     class MockUser:
         @staticmethod
         async def get(_id):
-            raise Exception("Some DB error")
+            raise Exception("Some  error")
 
     monkeypatch.setattr("app.auth.controllers.refresh_access_token.User", MockUser)
 
@@ -254,6 +290,19 @@ async def test_refresh_access_token_unhandled_exception(monkeypatch):
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
     req = RefreshTokenRequest(refresh_token=token)
     res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 500
+    assert "internal server error" in res.body.decode().lower()
+@pytest.mark.asyncio
+async def test_refresh_access_token_missing_secret_returns_500(monkeypatch):
+    # Ensure both env and module constant are unset
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", None, raising=False)
+
+    # Token value is irrelevant; function should short-circuit before decoding
+    req = RefreshTokenRequest(refresh_token="anything")
+    res = await refresh_access_token(req, "req-id")
+
     assert isinstance(res, JSONResponse)
     assert res.status_code == 500
     assert "internal server error" in res.body.decode().lower()

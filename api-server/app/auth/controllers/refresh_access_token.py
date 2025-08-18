@@ -130,5 +130,5 @@ async def refresh_access_token(
         )
         return JSONResponse(
             status_code=500,
-            content={"detail": "Internal server error"}
+            content={'success': False, 'detail': 'Internal server error'}
         )

@@ -18,14 +18,15 @@ from app.auth.constants import DENIED_USER_STATUSES
 
 logger = LogsManager().get_logger()
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600        # 1 hour
 REFRESH_EXPIRES_IN = 3600*24 # 1 day
 
 
 async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Union[JSONResponse, TokenResponse]:
-    if not JWT_SECRET_KEY:
+    secret = os.getenv("JWT_SECRET_KEY")
+    if not secret:
         logger.error("JWT secret missing", x_exosphere_request_id=x_exosphere_request_id)
         return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
     try:
@@ -50,11 +51,11 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
 
         # Deny unverified users
         verification_status_value = getattr(getattr(user, "verification_status", None), "value", getattr(user, "verification_status", None))
-        if verification_status_value == "NOT_VERIFIED":
+        if verification_status_value in {"NOT_VERIFIED", "BLOCKED", "DELETED"}:
             logger.error("Unverified user - token request denied", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=403, content={"success": False, "detail": "User is not verified"})
 
-        privilege = None
+        previlage = None
         if request.project:
             try:
                 project = await Project.get(ObjectId(request.project))
@@ -69,13 +70,13 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
             logger.info("Project found", x_exosphere_request_id=x_exosphere_request_id)
             if project.super_admin.ref.id == user.id:
-                privilege = "super_admin"
+                previlage = "super_admin"
             else:    
                 for project_user in project.users:
                     if project_user.user.ref.id == user.id:
-                        privilege = project_user.permission.value
+                        previlage = project_user.permission.value
                         break
-            if not privilege:
+            if not previlage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         
@@ -88,7 +89,7 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
             verification_status=verification_status_value,
             status=status_value,
             project=request.project,
-            previlage=privilege,
+            previlage=previlage,
             satellites=request.satellites,
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
@@ -100,7 +101,7 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
             verification_status=verification_status_value,
             status=status_value,
             project=request.project,
-            previlage=privilege,
+            previlage=previlage,
             satellites=request.satellites,
             exp=int((datetime.now() + timedelta(seconds=REFRESH_EXPIRES_IN)).timestamp()),
             token_type=TokenType.refresh.value
@@ -108,8 +109,8 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
 
         # Return tokens
         return TokenResponse(
-            access_token=jwt.encode(token_claims.model_dump(), JWT_SECRET_KEY, algorithm=JWT_ALGORITHM),
-            refresh_token=jwt.encode(refresh_claims.model_dump(), JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+                access_token=jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM),
+                refresh_token=jwt.encode(refresh_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
         )
     except Exception as e:
         logger.error("Error creating token", error=e, x_exosphere_request_id=x_exosphere_request_id)
