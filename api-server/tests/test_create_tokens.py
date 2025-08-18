@@ -106,15 +106,11 @@ async def test_create_token_unverified_user(monkeypatch, dummy_user_cls):
 
 
 @pytest.mark.asyncio
-async def test_create_token_missing_jwt_secret(monkeypatch, dummy_user_cls):
+def test_create_token_missing_jwt_secret(monkeypatch):
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     import app.auth.controllers.create_token as create_token_module
-    importlib.reload(create_token_module)
-    user = dummy_user_cls()
-    patch_user_find_one(monkeypatch, user)
-    req = TokenRequest(identifier="user", credential="pass", project=None, satellites=None)
-    with pytest.raises((ValueError, RuntimeError)):
-        await create_token_module.create_token(req, "req-id")
+    with pytest.raises(RuntimeError):
+        importlib.reload(create_token_module)
 
 
 @pytest.mark.asyncio

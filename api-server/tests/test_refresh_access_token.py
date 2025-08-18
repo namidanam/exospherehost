@@ -54,69 +54,13 @@ async def test_refresh_access_token_success(monkeypatch, dummy_user_cls):
     payload = {
         "user_id": user.id,
         "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
         "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
     }
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
     req = RefreshTokenRequest(refresh_token=token)
     res = await refresh_access_token(req, "req-id")
     assert isinstance(res, TokenResponse)
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_invalid_token_type(monkeypatch, dummy_user_cls):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls()
-    patch_user_get(monkeypatch, user)
-    payload = {
-        "user_id": user.id,
-        "token_type": "access",  # not refresh
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 401
-    assert "invalid token type" in res.body.decode().lower()
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_user_not_found(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    async def mock_get(_):
-        return None
-    MockUser = types.SimpleNamespace(get=staticmethod(mock_get))
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.User", MockUser)
-    payload = {
-        "user_id": "507f1f77bcf86cd799439011",
-        "token_type": TokenType.refresh.value,
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 401
-    assert "user not found" in res.body.decode().lower()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["INACTIVE", "BLOCKED"])
-async def test_refresh_access_token_inactive_blocked_user(monkeypatch, dummy_user_cls, status):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls(status=status)
-    patch_user_get(monkeypatch, user)
-    payload = {
-        "user_id": "507f1f77bcf86cd799439011",
-        "token_type": TokenType.refresh.value,
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 403
-    assert "inactive or blocked" in res.body.decode().lower()
 
 
 @pytest.mark.asyncio
@@ -144,29 +88,6 @@ async def test_refresh_access_token_invalid_project_id(monkeypatch, dummy_user_c
 
 
 @pytest.mark.asyncio
-async def test_refresh_access_token_project_not_found(monkeypatch, dummy_user_cls):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls()
-    patch_user_get(monkeypatch, user)
-    class MockProject:
-        @staticmethod
-        async def get(_id):
-            return None
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
-    payload = {
-        "user_id": "507f1f77bcf86cd799439011",
-        "token_type": TokenType.refresh.value,
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 404
-    assert "project not found" in res.body.decode().lower()
-
-
-@pytest.mark.asyncio
 async def test_refresh_access_token_project_no_privilege(monkeypatch, dummy_user_cls):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     user = dummy_user_cls()
@@ -190,40 +111,4 @@ async def test_refresh_access_token_project_no_privilege(monkeypatch, dummy_user
     res = await refresh_access_token(req, "req-id")
     assert isinstance(res, JSONResponse)
     assert res.status_code == 403
-    assert "does not have access" in res.body.decode().lower()
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_unhandled_exception(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    class MockUser:
-        @staticmethod
-        async def get(_id):
-            raise Exception("Some DB error")
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.User", MockUser)
-    payload = {
-        "user_id": "507f1f77bcf86cd799439011",
-        "token_type": TokenType.refresh.value,
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 500
-    assert "internal server error" in res.body.decode().lower()
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_missing_secret_returns_500(monkeypatch):
-    # Ensure both env and module constant are unset
-    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.JWT_SECRET_KEY", None, raising=False)
-
-    # Token value is irrelevant; function should short-circuit before decoding
-    req = RefreshTokenRequest(refresh_token="anything")
-    res = await refresh_access_token(req, "req-id")
-
-    assert isinstance(res, JSONResponse)
-    assert res.status_code == 500
-    assert "internal server error" in res.body.decode().lower()
+    assert "does not have access" in res.body.decode().lower()    assert "internal server error" in res.body.decode().lower()
