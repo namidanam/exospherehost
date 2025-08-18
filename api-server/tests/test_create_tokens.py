@@ -46,6 +46,7 @@ async def test_create_token_success(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_token_invalid_user(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     async def mock_find_one(_query):
         return None
 
@@ -64,6 +65,7 @@ async def test_create_token_invalid_user(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_token_invalid_credential(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
         name = "John"
@@ -155,9 +157,7 @@ async def test_create_token_unverified_user(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_token_missing_jwt_secret(monkeypatch):
-    # Patch the module variable directly to None
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", None)
-
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
         name = "John"
