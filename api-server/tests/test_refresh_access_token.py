@@ -254,9 +254,7 @@ async def test_refresh_access_token_unhandled_exception(monkeypatch):
     token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
     req = RefreshTokenRequest(refresh_token=token)
     try:
-        res = await refresh_access_token(req, "req-id")
-    except Exception as e:
-        assert str(e) == "Some DB error"
-    else:
-        # If no exception, should return None (for coverage)
-        assert res is None
+            res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 500
+    assert "internal server error" in res.body.decode().lower()
