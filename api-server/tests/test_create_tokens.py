@@ -3,7 +3,7 @@ import jwt
 import types
 import pytest
 from starlette.responses import JSONResponse
-from bson.errors import InvalidId
+
 
 from app.auth.controllers.create_token import create_token, JWT_ALGORITHM
 from app.auth.models.token_request import TokenRequest
