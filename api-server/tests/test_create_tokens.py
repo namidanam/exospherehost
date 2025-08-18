@@ -54,10 +54,7 @@ async def test_create_token_success(monkeypatch, dummy_user_cls):
 @pytest.mark.asyncio
 async def test_create_token_invalid_user(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    async def mock_find_one(_):
-        return None
-    MockUser = types.SimpleNamespace(identifier="identifier", find_one=staticmethod(mock_find_one))
-    monkeypatch.setattr("app.auth.controllers.create_token.User", MockUser)
+    patch_user_find_one(monkeypatch, None)
     req = TokenRequest(identifier="bad", credential="pass", project=None, satellites=None)
     res = await create_token(req, "req-id")
     assert isinstance(res, JSONResponse)
@@ -77,7 +74,10 @@ async def test_create_token_invalid_credential(monkeypatch, dummy_user_cls):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status_value", ["INACTIVE", "BLOCKED"])
+@pytest.mark.parametrize(
+    "status_value",
+    [UserStatusEnum.INACTIVE.value, UserStatusEnum.BLOCKED.value],
+)
 async def test_create_token_inactive_blocked_user(monkeypatch, dummy_user_cls, status_value):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     user = dummy_user_cls(status=status_value)
@@ -92,7 +92,7 @@ async def test_create_token_inactive_blocked_user(monkeypatch, dummy_user_cls, s
 @pytest.mark.asyncio
 async def test_create_token_unverified_user(monkeypatch, dummy_user_cls):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls(verification_status="NOT_VERIFIED")
+    user = dummy_user_cls(verification_status=VerificationStatusEnum.NOT_VERIFIED.value)
     patch_user_find_one(monkeypatch, user)
     req = TokenRequest(identifier="user", credential="pass", project=None, satellites=None)
     res = await create_token(req, "req-id")
@@ -117,11 +117,6 @@ async def test_create_token_invalid_project_id(monkeypatch, dummy_user_cls):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     user = dummy_user_cls()
     patch_user_find_one(monkeypatch, user)
-    class MockProject:
-        @staticmethod
-        async def get(_id):
-            raise InvalidId("bad id")
-    monkeypatch.setattr("app.auth.controllers.create_token.Project", MockProject)
     req = TokenRequest(identifier="user", credential="pass", project="badid", satellites=None)
     res = await create_token(req, "req-id")
     assert isinstance(res, JSONResponse)
