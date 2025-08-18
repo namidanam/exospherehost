@@ -14,6 +14,7 @@ from ..models.token_type_enum import TokenType
 from app.singletons.logs_manager import LogsManager
 from app.user.models.user_database_model import User
 from app.project.models.project_database_model import Project
+from app.auth.constants import DENIED_USER_STATUSES
 
 logger = LogsManager().get_logger()
 
@@ -22,8 +23,6 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600        # 1 hour
 REFRESH_EXPIRES_IN = 3600*24 # 1 day
 
-# List of user statuses that are denied access
-DENIED_USER_STATUSES = ["INACTIVE", "BLOCKED"]
 
 async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Union[JSONResponse, TokenResponse]:
     if not JWT_SECRET_KEY:
@@ -79,9 +78,7 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
             if not privilege:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
-        # Get normalized values for consistency
-        status_value = getattr(getattr(user, "status", None), "value", getattr(user, "status", None))
-        verification_status_value = getattr(getattr(user, "verification_status", None), "value", getattr(user, "verification_status", None))
+        
 
         # Prepare claims
         token_claims = TokenClaims(

@@ -3,6 +3,8 @@ import jwt
 from datetime import datetime, timedelta
 from starlette.responses import JSONResponse
 from bson import ObjectId
+from typing import Union
+from bson.errors import InvalidId
 
 from ..models.refresh_token_request import RefreshTokenRequest
 from ..models.token_response import TokenResponse
@@ -12,28 +14,27 @@ from ..models.token_type_enum import TokenType
 from app.singletons.logs_manager import LogsManager
 
 from app.user.models.user_database_model import User
-from app.user.models.user_status_enum import UserStatusEnum
 from app.project.models.project_database_model import Project
+from app.auth.constants import DENIED_USER_STATUSES
 
 logger = LogsManager().get_logger()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-if not JWT_SECRET_KEY:
-    raise ValueError("JWT_SECRET_KEY environment variable is not set or is empty.")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
 
-# List of user statuses that are denied access for refresh
-DENIED_USER_STATUSES = ["INACTIVE", "BLOCKED"]
 
 async def refresh_access_token(
     request: RefreshTokenRequest, 
     x_exosphere_request_id: str
-) -> TokenResponse:
+) -> Union[TokenResponse, JSONResponse]:
     """
     New endpoint that takes refresh token and returns new access token
     """
+    if not JWT_SECRET_KEY:
+        logger.error("JWT secret missing", x_exosphere_request_id=x_exosphere_request_id)
+        return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
     try:
         # Decode refresh token
         payload = jwt.decode(
@@ -46,7 +47,7 @@ async def refresh_access_token(
         if payload.get("token_type") != TokenType.refresh.value:
             return JSONResponse(
                 status_code=401, 
-                content={"detail": "Invalid token type"}
+                content={"success": False, "detail": "Invalid token type"}
             )
         
         # Get user and check if denied
@@ -55,11 +56,12 @@ async def refresh_access_token(
         if not user:
             return JSONResponse(
                 status_code=401,
-                content={"detail": "User not found"}
+                content={"success": False, "detail": "User not found"}
             )
             
         # Deny users with statuses in DENIED_USER_STATUSES
-        status_value = getattr(getattr(user, "status", None), "value", getattr(user, "status", None))
+        status = getattr(user, "status", None)
+        status_value = getattr(status, "value", status)
         if status_value in DENIED_USER_STATUSES:
             logger.warning(
                 f"Inactive or blocked user attempted token refresh: {user.id}",
@@ -67,12 +69,16 @@ async def refresh_access_token(
             )
             return JSONResponse(
                 status_code=403,
-                content={"detail": "User account is inactive or blocked"}
+                content={"success": False, "detail": "User account is inactive or blocked"}
             )
         previlage = None
         project_id = payload.get("project")
         if project_id:
-            project = await Project.get(ObjectId(project_id))
+            try:
+                project = await Project.get(ObjectId(project_id))
+            except InvalidId:
+                logger.error("Invalid project id", x_exosphere_request_id=x_exosphere_request_id)
+                return JSONResponse(status_code=400, content={"success": False, "detail": "Invalid project id"})
             if not project:
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
@@ -121,4 +127,8 @@ async def refresh_access_token(
             "Error refreshing token", 
             error=e, 
             x_exosphere_request_id=x_exosphere_request_id
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"}
         )
