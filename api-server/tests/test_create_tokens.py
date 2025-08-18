@@ -15,7 +15,7 @@ from app.user.models.verification_status_enum import VerificationStatusEnum
 async def test_create_token_success(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
     # Patch the module variable directly
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -95,7 +95,7 @@ async def test_create_token_invalid_credential(monkeypatch):
 @pytest.mark.parametrize("status_value", ["INACTIVE", "BLOCKED"])
 async def test_create_token_inactive_blocked_user(monkeypatch, status_value):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -127,7 +127,7 @@ async def test_create_token_inactive_blocked_user(monkeypatch, status_value):
 @pytest.mark.asyncio
 async def test_create_token_unverified_user(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -186,7 +186,7 @@ async def test_create_token_missing_jwt_secret(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_invalid_project_id(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -222,7 +222,7 @@ async def test_create_token_invalid_project_id(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_project_load_exception(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -258,7 +258,7 @@ async def test_create_token_project_load_exception(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_project_not_found(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -294,7 +294,7 @@ async def test_create_token_project_not_found(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_project_no_privilege(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
@@ -334,7 +334,7 @@ async def test_create_token_project_no_privilege(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_token_unhandled_exception(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    monkeypatch.setattr("app.auth.controllers.create_token.JWT_SECRET_KEY", "test_secret")
+     
 
     class DummyUser:
         id = "507f1f77bcf86cd799439011"
