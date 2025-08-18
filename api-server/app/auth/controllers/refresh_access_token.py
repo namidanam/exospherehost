@@ -20,6 +20,8 @@ from app.auth.constants import DENIED_USER_STATUSES
 logger = LogsManager().get_logger()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise ValueError("JWT_SECRET_KEY environment variable is not set or is empty")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
@@ -32,9 +34,6 @@ async def refresh_access_token(
     """
     New endpoint that takes refresh token and returns new access token
     """
-    if not JWT_SECRET_KEY:
-        logger.error("JWT secret missing", x_exosphere_request_id=x_exosphere_request_id)
-        return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
     try:
         # Decode refresh token
         payload = jwt.decode(
@@ -85,6 +84,7 @@ async def refresh_access_token(
             logger.info("Project found", x_exosphere_request_id=x_exosphere_request_id)
             if project.super_admin.ref.id == user.id:
                 previlage = "super_admin"
+        else:
             for project_user in project.users:
                 if project_user.user.ref.id == user.id:
                     previlage = project_user.permission.value

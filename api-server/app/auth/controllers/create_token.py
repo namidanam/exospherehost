@@ -19,16 +19,16 @@ from app.auth.constants import DENIED_USER_STATUSES
 logger = LogsManager().get_logger()
 
 
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600        # 1 hour
 REFRESH_EXPIRES_IN = 3600*24 # 1 day
 
 
 async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Union[JSONResponse, TokenResponse]:
-    secret = os.getenv("JWT_SECRET_KEY")
-    if not secret:
-        logger.error("JWT secret missing", x_exosphere_request_id=x_exosphere_request_id)
-        return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
     try:
         logger.info("Finding user", x_exosphere_request_id=x_exosphere_request_id)
         user = await User.find_one(User.identifier == request.identifier)
@@ -42,7 +42,8 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
             return JSONResponse(status_code=401, content={"success": False, "detail": "Invalid credential"})
         
         # Deny users with statuses in DENIED_USER_STATUSES
-        status_value = getattr(getattr(user, "status", None), "value", getattr(user, "status", None))
+        status = getattr(user, "status", None)
+        status_value = getattr(status, "value", status)
         if status_value in DENIED_USER_STATUSES:
             logger.error("Inactive or blocked user - token request denied", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=403, content={"success": False, "detail": "User is inactive or blocked"})
@@ -50,7 +51,8 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
         logger.info("User found and credential verified", x_exosphere_request_id=x_exosphere_request_id)
 
         # Deny unverified users
-        verification_status_value = getattr(getattr(user, "verification_status", None), "value", getattr(user, "verification_status", None))
+        verification_status = getattr(user, "verification_status", None)
+        verification_status_value = getattr(verification_status, "value", verification_status)
         if verification_status_value in {"NOT_VERIFIED", "BLOCKED", "DELETED"}:
             logger.error("Unverified user - token request denied", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=403, content={"success": False, "detail": "User is not verified"})
@@ -109,8 +111,8 @@ async def create_token(request: TokenRequest, x_exosphere_request_id: str) -> Un
 
         # Return tokens
         return TokenResponse(
-                access_token=jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM),
-                refresh_token=jwt.encode(refresh_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
+            access_token=jwt.encode(token_claims.model_dump(), JWT_SECRET_KEY, algorithm=JWT_ALGORITHM),
+            refresh_token=jwt.encode(refresh_claims.model_dump(), JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
         )
     except Exception as e:
         logger.error("Error creating token", error=e, x_exosphere_request_id=x_exosphere_request_id)
