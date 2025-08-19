@@ -3,9 +3,8 @@ import jwt
 from datetime import datetime, timedelta
 from starlette.responses import JSONResponse
 from bson import ObjectId
-from typing import Union
+from typing import Union,Optional
 from bson.errors import InvalidId
-from typing import Union,Optional 
 
 
 from ..models.refresh_token_request import RefreshTokenRequest
@@ -93,7 +92,7 @@ async def refresh_access_token(
                 for project_user in getattr(project, "users", []):
                     if getattr(getattr(project_user, "user", None), "ref", None) and getattr(project_user.user.ref, "id", None) == user.id:
                         perm = getattr(project_user, "permission", None)
-                        previlage = getattr(perm, "value", perm)
+                        privilage = getattr(perm, "value", perm)
                         break
             if not privilage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
