@@ -108,7 +108,7 @@ async def refresh_access_token(
             verification_status=vstatus_value,
             status=status_value,
             project=project_id,
-            privilage=previlage,
+            privilege=previlage,
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
