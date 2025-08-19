@@ -85,16 +85,16 @@ async def refresh_access_token(
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
 
-        privilege = None
+        privilage = None
         if project:
             if project.super_admin.ref.id == user.id:
-                privilege = "super_admin"
+                privilage = "super_admin"
             else:
                 for project_user in getattr(project, "users", []):
                     if getattr(getattr(project_user, "user", None), "ref", None) and getattr(project_user.user.ref, "id", None) == user.id:
-                        privilege = getattr(project_user, "permission", None)
+                        privilage = getattr(project_user, "permission", None)
                         break
-            if not privilege:
+            if not privilage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         # Create new access token with fresh user data
@@ -105,7 +105,7 @@ async def refresh_access_token(
             verification_status=user.verification_status,
             status=status_value,
             project=payload.get("project"),  
-            previlage=privilege,  
+            previlage=privilage,  
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value

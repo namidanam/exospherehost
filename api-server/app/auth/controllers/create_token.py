@@ -21,7 +21,7 @@ logger = LogsManager().get_logger()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
-    raise RuntimeError("JWT_SECRET_KEY environment variable is not set")
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set or is empty")
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600        # 1 hour
