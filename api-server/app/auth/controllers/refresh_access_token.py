@@ -3,7 +3,7 @@ import jwt
 from datetime import datetime, timedelta
 from starlette.responses import JSONResponse
 from bson import ObjectId
-from typing import Union,Optional
+from typing import Union, Optional
 from bson.errors import InvalidId
 
 
@@ -71,9 +71,10 @@ async def refresh_access_token(
                 content={"success": False, "detail": "User account is inactive or blocked"}
             )
         project = None
-        if payload.get("project"):
+        project_id = payload.get("project")
+        if project_id:
             try:
-                project = await Project.get(ObjectId(payload.get("project")))
+                project = await Project.get(ObjectId(project_id))
             except InvalidId:
                 logger.error("Invalid project id", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=400, content={"success": False, "detail": "Invalid project id"})
@@ -84,17 +85,17 @@ async def refresh_access_token(
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
 
-        privilage = None
+        previlage = None
         if project:
             if project.super_admin.ref.id == user.id:
-                privilage = "super_admin"
+                previlage = "super_admin"
             else:
                 for project_user in getattr(project, "users", []):
                     if getattr(getattr(project_user, "user", None), "ref", None) and getattr(project_user.user.ref, "id", None) == user.id:
                         perm = getattr(project_user, "permission", None)
-                        privilage = getattr(perm, "value", perm)
+                        previlage = getattr(perm, "value", perm)
                         break
-            if not privilage:
+            if not previlage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         # Create new access token with fresh user data
@@ -103,11 +104,11 @@ async def refresh_access_token(
         token_claims = TokenClaims(
             user_id=str(user.id),
             user_name=user.name,
-            user_type=user.type,
+            user_type=getattr(user.type,"value",user.type),
             verification_status=vstatus_value,
             status=status_value,
-            project=payload.get("project"),
-            privilage=privilage,
+            project=project_id,
+            privilage=previlage,
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
