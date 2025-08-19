@@ -5,6 +5,7 @@ from starlette.responses import JSONResponse
 from bson import ObjectId
 from typing import Union
 from bson.errors import InvalidId
+from typing import Union,Optional 
 
 
 from ..models.refresh_token_request import RefreshTokenRequest
@@ -22,26 +23,21 @@ logger = LogsManager().get_logger()
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
-    raise ValueError("JWT_SECRET_KEY environment variable is not set or is empty")
-
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set or is empty")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
 
 
 async def refresh_access_token(
     request: RefreshTokenRequest, 
-    x_exosphere_request_id: str
+    x_exosphere_request_id: Optional[str]
 ) -> Union[TokenResponse, JSONResponse]:
     """
     New endpoint that takes refresh token and returns new access token
     """
     try:
-        # Decode refresh token
-        payload = jwt.decode(
-            request.refresh_token, 
-            JWT_SECRET_KEY, 
-            algorithms=[JWT_ALGORITHM]
-        )
+        secret = os.getenv("JWT_SECRET_KEY") or JWT_SECRET_KEY
+        payload = jwt.decode(request.refresh_token, secret, algorithms=[JWT_ALGORITHM])
         
         # Verify it's a refresh token
         if payload.get("token_type") != TokenType.refresh.value:
@@ -51,8 +47,12 @@ async def refresh_access_token(
             )
         
         # Get user and check if denied
-        user = await User.get(ObjectId(payload["user_id"]))
-        
+        try:
+            user_oid = ObjectId(payload["user_id"])
+        except (InvalidId, KeyError, TypeError):
+            return JSONResponse(status_code=401, content={"success": False, "detail": "Invalid token"})
+        user = await User.get(user_oid)
+
         if not user:
             return JSONResponse(
                 status_code=401,
@@ -85,38 +85,37 @@ async def refresh_access_token(
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
 
-        privilege = None
+        privilage = None
         if project:
             if project.super_admin.ref.id == user.id:
-                privilege = "super_admin"
+                privilage = "super_admin"
             else:
                 for project_user in getattr(project, "users", []):
                     if getattr(getattr(project_user, "user", None), "ref", None) and getattr(project_user.user.ref, "id", None) == user.id:
-                        privilege = getattr(project_user, "permission", None)
+                        perm = getattr(project_user, "permission", None)
+                        previlage = getattr(perm, "value", perm)
                         break
-            if not privilege:
+            if not privilage:
                 logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         # Create new access token with fresh user data
+        vstatus = getattr(user, "verification_status", None)
+        vstatus_value = getattr(vstatus, "value", vstatus)
         token_claims = TokenClaims(
             user_id=str(user.id),
             user_name=user.name,
             user_type=user.type,
-            verification_status=user.verification_status,
+            verification_status=vstatus_value,
             status=status_value,
             project=payload.get("project"),
-            privilege=privilege,
+            privilage=privilage,
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
-        )
-        
-        new_access_token = jwt.encode(
-            token_claims.model_dump(), 
-            JWT_SECRET_KEY, 
-            algorithm=JWT_ALGORITHM
-        )
-        
+            )
+
+        new_access_token = jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
+
         # Return ONLY new access token (not a new refresh token)
         return TokenResponse(
             access_token=new_access_token
@@ -125,7 +124,12 @@ async def refresh_access_token(
     except jwt.ExpiredSignatureError:
         return JSONResponse(
             status_code=401,
-            content={"detail": "Refresh token expired"}
+            content={"success": False, "detail": "Refresh token expired"}
+        )
+    except jwt.InvalidTokenError:
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "detail": "Invalid token"}
         )
     except Exception as e:
         logger.error(
