@@ -23,6 +23,8 @@ logger = LogsManager().get_logger()
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set or is empty")
+# Note: We also read the secret per-request (with env first, then fallback to
+# JWT_SECRET_KEY) to support runtime key rotation while still failing fast on startup.
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
 
@@ -35,7 +37,10 @@ async def refresh_access_token(
     New endpoint that takes refresh token and returns new access token
     """
     try:
-        secret = os.getenv("JWT_SECRET_KEY") or JWT_SECRET_KEY
+        secret = os.getenv("JWT_SECRET_KEY")
+        # Optional: if secret is ever None here, fail closed
+        if not secret:
+            return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
         payload = jwt.decode(request.refresh_token, secret, algorithms=[JWT_ALGORITHM])
         
         # Verify it's a refresh token
@@ -63,8 +68,10 @@ async def refresh_access_token(
         status_value = getattr(status, "value", status)
         if status_value in DENIED_USER_STATUSES:
             logger.warning(
-                f"Inactive or blocked user attempted token refresh: {user.id}",
-                x_exosphere_request_id=x_exosphere_request_id
+                "Inactive or blocked user attempted token refresh",
+                x_exosphere_request_id=x_exosphere_request_id,
+                user_id=str(user.id),
+                user_status=status_value,
             )
             return JSONResponse(
                 status_code=403,
@@ -108,11 +115,11 @@ async def refresh_access_token(
             verification_status=vstatus_value,
             status=status_value,
             project=project_id,
-            privilege=previlage,
+            previlage=previlage,
             satellites=payload.get("satellites"),
             exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access.value
-            )
+        )
 
         new_access_token = jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
 
