@@ -40,6 +40,7 @@ async def refresh_access_token(
         secret = os.getenv("JWT_SECRET_KEY")
         # Optional: if secret is ever None here, fail closed
         if not secret:
+            logger.error("JWT secret missing at request time", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
         payload = jwt.decode(request.refresh_token, secret, algorithms=[JWT_ALGORITHM])
         
@@ -54,6 +55,7 @@ async def refresh_access_token(
         try:
             user_oid = ObjectId(payload["user_id"])
         except (InvalidId, KeyError, TypeError):
+            logger.warning("Invalid refresh token payload: bad user_id", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=401, content={"success": False, "detail": "Invalid token"})
         user = await User.get(user_oid)
 
@@ -83,7 +85,7 @@ async def refresh_access_token(
             try:
                 project = await Project.get(ObjectId(project_id))
             except InvalidId:
-                logger.error("Invalid project id", x_exosphere_request_id=x_exosphere_request_id)
+                logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
                 return JSONResponse(status_code=400, content={"success": False, "detail": "Invalid project id"})
             except Exception as e:
                 logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id)
@@ -94,7 +96,7 @@ async def refresh_access_token(
 
         previlage = None
         if project:
-            if project.super_admin.ref.id == user.id:
+            if getattr(getattr(project, "super_admin", None), "ref", None) and getattr(project.super_admin.ref, "id", None) == user.id:
                 previlage = "super_admin"
             else:
                 for project_user in getattr(project, "users", []):
