@@ -53,7 +53,7 @@ async def refresh_access_token(
         if payload.get("token_type") != TokenType.refresh.value:
             return JSONResponse(
                 status_code=401, 
-                content={"success": False, "detail": "Invalid token type"}
+                content={"success": False, "detail": "Invalid token"}
             )
         
         # Get user and check if denied
@@ -139,15 +139,20 @@ async def refresh_access_token(
         # Create new access token with fresh user data
         vstatus = getattr(user, "verification_status", None)
         vstatus_value = getattr(vstatus, "value", vstatus)
+        # Ensure satellites is a list[str] if present; otherwise, drop it.
+        satellites_claim = payload.get("satellites")
+        if not (isinstance(satellites_claim, list) and all(isinstance(s, str) for s in satellites_claim)):
+             satellites_claim = None
+        
         token_claims = TokenClaims(
             user_id=str(user.id),
             user_name=user.name,
-            user_type=getattr(user.type,"value",user.type),
+            user_type=getattr(user.type,"value" ,user.type),
             verification_status=vstatus_value,
             status=status_value,
             project=project_id,
             previlage=previlage,
-            satellites=payload.get("satellites"),
+            satellites=satellites_claim,
             exp=int((datetime.now(timezone.utc) + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
             token_type=TokenType.access
         )
