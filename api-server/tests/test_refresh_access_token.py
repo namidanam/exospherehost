@@ -262,3 +262,155 @@ async def test_refresh_access_token_unhandled_exception(monkeypatch, dummy_user_
     assert isinstance(res, JSONResponse)
     assert res.status_code == 500
     assert "internal server error" in res.body.decode().lower()
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_missing_secret(monkeypatch, dummy_user_cls):
+    # Covers: logger.error("JWT secret missing at request time", ...) and return JSONResponse(status_code=500, ...)
+    monkeypatch.setenv("JWT_SECRET_KEY", "")  # Simulate missing secret at runtime
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    
+    class DummyProject:
+        super_admin = type("SuperAdmin", (), {"ref": type("Ref", (), {"id": user.id})})()
+        users = []
+    
+    class MockProject:
+        @staticmethod
+        async def get(_id):
+            return DummyProject()
+    
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
+    
+    payload = {
+        "user_id": user.id,
+        "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
+    }
+    token = jwt.encode(payload, "dummy_secret", algorithm=JWT_ALGORITHM)  # Use dummy for encoding (decode will fail later, but we hit the secret check first)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 500
+    assert "internal server error" in res.body.decode().lower()
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_invalid_user_id_payload(monkeypatch, dummy_user_cls):
+    # Covers: except (InvalidId, KeyError, TypeError): logger.warning(...) and return JSONResponse(status_code=401, ...)
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    
+    payload = {
+        # Missing "user_id" key to trigger KeyError (could also use invalid string for InvalidId)
+        "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
+    }
+    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 401
+    assert "invalid token" in res.body.decode().lower()
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_fetch_links_async_success(monkeypatch, dummy_user_cls):
+    # Covers: try: result = fetch_links() ... import inspect ... if inspect.isawaitable(result): await result (successful async case)
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    
+    class DummyProject:
+        async def fetch_links(self):
+            return "success"  # Async method to trigger await
+        super_admin = type("SuperAdmin", (), {"ref": type("Ref", (), {"id": user.id})})()
+        users = []
+    
+    class MockProject:
+        @staticmethod
+        async def get(_id):
+            return DummyProject()
+    
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
+    
+    payload = {
+        "user_id": user.id,
+        "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
+    }
+    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, TokenResponse)  # Succeeds after fetching links
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_fetch_links_exception(monkeypatch, dummy_user_cls):
+    # Covers: except Exception as e: logger.error( ... (error handling for fetch_links failure)
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    
+    class DummyProject:
+        def fetch_links(self):
+            raise Exception("fetch error")  # Trigger exception
+        super_admin = type("SuperAdmin", (), {"ref": type("Ref", (), {"id": user.id})})()
+        users = []
+    
+    class MockProject:
+        @staticmethod
+        async def get(_id):
+            return DummyProject()
+    
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
+    
+    payload = {
+        "user_id": user.id,
+        "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
+    }
+    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, JSONResponse)
+    assert res.status_code == 500
+    assert "internal server error" in res.body.decode().lower()
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_privilege_check_in_loop(monkeypatch, dummy_user_cls):
+    # Covers: if getattr(getattr(project_user, "user", None), "ref", None) and ... == user.id: perm = ... previlage = ... break
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
+    user = dummy_user_cls()
+    patch_user_get(monkeypatch, user)
+    
+    class DummyPermission:
+        value = "editor"  # Enum-like permission
+    
+    class DummyProjectUser:
+        user = type("User", (), {"ref": type("Ref", (), {"id": user.id})})()
+        permission = DummyPermission()
+    
+    class DummyProject:
+        super_admin = None  # Not super_admin to force loop
+        users = [DummyProjectUser()]  # List with matching user to hit the if and set previlage
+    
+    class MockProject:
+        @staticmethod
+        async def get(_id):
+            return DummyProject()
+    
+    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
+    
+    payload = {
+        "user_id": user.id,
+        "token_type": TokenType.refresh.value,
+        "project": "507f1f77bcf86cd799439012",
+        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
+    }
+    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
+    req = RefreshTokenRequest(refresh_token=token)
+    res = await refresh_access_token(req, "req-id")
+    assert isinstance(res, TokenResponse)  # Succeeds after privilege assignment in loop
+
