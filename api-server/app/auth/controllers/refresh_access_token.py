@@ -1,6 +1,6 @@
 import os
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from starlette.responses import JSONResponse
 from bson import ObjectId
 from typing import Union, Optional
@@ -91,7 +91,10 @@ async def refresh_access_token(
                 logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
                 return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
             if not project:
-                logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
+                logger.error(
+                    "Project not found",
+                    x_exosphere_request_id=x_exosphere_request_id,                    project_id=project_id
+                )
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
 
         previlage = None
@@ -105,7 +108,12 @@ async def refresh_access_token(
                         previlage = getattr(perm, "value", perm)
                         break
             if not previlage:
-                logger.error("User does not have access to the project", x_exosphere_request_id=x_exosphere_request_id)
+                logger.error(
+                    "User does not have access to the project",
+                    x_exosphere_request_id=x_exosphere_request_id,
+                    user_id=str(user.id),
+                    project_id=project_id,
+                )
                 return JSONResponse(status_code=403, content={"success": False, "detail": "User does not have access to the project"})
         # Create new access token with fresh user data
         vstatus = getattr(user, "verification_status", None)
@@ -119,8 +127,8 @@ async def refresh_access_token(
             project=project_id,
             previlage=previlage,
             satellites=payload.get("satellites"),
-            exp=int((datetime.now() + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
-            token_type=TokenType.access.value
+            exp=int((datetime.now(timezone.utc) + timedelta(seconds=JWT_EXPIRES_IN)).timestamp()),
+            token_type=TokenType.access
         )
 
         new_access_token = jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
