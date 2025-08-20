@@ -93,7 +93,8 @@ async def refresh_access_token(
             if not project:
                 logger.error(
                     "Project not found",
-                    x_exosphere_request_id=x_exosphere_request_id,                    project_id=project_id
+                    x_exosphere_request_id=x_exosphere_request_id,
+                    project_id=project_id
                 )
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
 
