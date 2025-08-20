@@ -42,7 +42,12 @@ async def refresh_access_token(
         if not secret:
             logger.error("JWT secret missing at request time", x_exosphere_request_id=x_exosphere_request_id)
             return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
-        payload = jwt.decode(request.refresh_token, secret, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            request.refresh_token,
+            secret,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "token_type"]},
+        )
         
         # Verify it's a refresh token
         if payload.get("token_type") != TokenType.refresh.value:
@@ -62,9 +67,8 @@ async def refresh_access_token(
         if not user:
             return JSONResponse(
                 status_code=401,
-                content={"success": False, "detail": "User not found"}
-            )
-            
+                content={"success": False, "detail": "Invalid token"}
+            )            
         # Deny users with statuses in DENIED_USER_STATUSES
         status = getattr(user, "status", None)
         status_value = getattr(status, "value", status)
@@ -97,7 +101,12 @@ async def refresh_access_token(
                     project_id=project_id
                 )
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
-
+            # Ensure Link[...] fields are populated to avoid false negatives in privilege checks.
+            try:
+                await project.fetch_links()
+            except Exception as e:
+                logger.error("Error fetching project links", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
+                return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
         previlage = None
         if project:
             if getattr(getattr(project, "super_admin", None), "ref", None) and getattr(project.super_admin.ref, "id", None) == user.id:
@@ -132,7 +141,7 @@ async def refresh_access_token(
             token_type=TokenType.access
         )
 
-        new_access_token = jwt.encode(token_claims.model_dump(), secret, algorithm=JWT_ALGORITHM)
+        new_access_token = jwt.encode(token_claims.model_dump(mode="json"), secret, algorithm=JWT_ALGORITHM)
 
         # Return ONLY new access token (not a new refresh token)
         return TokenResponse(
