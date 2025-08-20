@@ -380,10 +380,10 @@ async def test_refresh_access_token_fetch_links_exception(monkeypatch, dummy_use
 
 @pytest.mark.asyncio
 async def test_refresh_access_token_privilege_check_in_loop(monkeypatch, dummy_user_cls):
-    # Covers: if getattr(getattr(project_user, "user", None), "ref", None) and ... == user.id: perm = ... previlage = ... break
     monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls()
-    patch_user_get(monkeypatch, user)
+    user = dummy_user_cls()  # Added: Define user here to fix NameError
+    
+    patch_user_get(monkeypatch, user)  # Use existing patch function
     
     class DummyPermission:
         value = "editor"  # Enum-like permission
