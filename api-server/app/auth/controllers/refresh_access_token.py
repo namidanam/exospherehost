@@ -23,8 +23,8 @@ logger = LogsManager().get_logger()
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set or is empty")
-# Note: We also read the secret per-request (with env first, then fallback to
-# JWT_SECRET_KEY) to support runtime key rotation while still failing fast on startup.
+# Note: We read the secret per-request from the environment (no fallback) to support
+# runtime key rotation, while still failing fast on startup if the env is missing.
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_IN = 3600 # 1 hour
 
@@ -85,10 +85,10 @@ async def refresh_access_token(
             try:
                 project = await Project.get(ObjectId(project_id))
             except InvalidId:
-                logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
+                logger.error("Invalid project id", x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
                 return JSONResponse(status_code=400, content={"success": False, "detail": "Invalid project id"})
             except Exception as e:
-                logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id)
+                logger.error("Error loading project", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
                 return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
             if not project:
                 logger.error("Project not found", x_exosphere_request_id=x_exosphere_request_id)
