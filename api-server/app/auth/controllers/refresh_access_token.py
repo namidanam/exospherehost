@@ -102,11 +102,22 @@ async def refresh_access_token(
                 )
                 return JSONResponse(status_code=404, content={"success": False, "detail": "Project not found"})
             # Ensure Link[...] fields are populated to avoid false negatives in privilege checks.
-            try:
-                await project.fetch_links()
-            except Exception as e:
-                logger.error("Error fetching project links", error=e, x_exosphere_request_id=x_exosphere_request_id, project_id=project_id)
-                return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
+            fetch_links = getattr(project, "fetch_links", None)
+            if callable(fetch_links):
+                try:
+                    result = fetch_links()
+                    # Beanie's fetch_links is async; but guard for any sync stubs.
+                    import inspect  # local import to avoid module-level dependency for tests
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception as e:
+                    logger.error(
+                        "Error fetching project links",
+                        error=e,
+                        x_exosphere_request_id=x_exosphere_request_id,
+                        project_id=project_id,
+                    )
+                    return JSONResponse(status_code=500, content={"success": False, "detail": "Internal server error"})
         previlage = None
         if project:
             if getattr(getattr(project, "super_admin", None), "ref", None) and getattr(project.super_admin.ref, "id", None) == user.id:
