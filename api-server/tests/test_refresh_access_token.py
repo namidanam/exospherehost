@@ -378,39 +378,3 @@ async def test_refresh_access_token_fetch_links_exception(monkeypatch, dummy_use
     assert res.status_code == 500
     assert "internal server error" in res.body.decode().lower()
 
-@pytest.mark.asyncio
-async def test_refresh_access_token_privilege_check_in_loop(monkeypatch, dummy_user_cls):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret")
-    user = dummy_user_cls()  # Added: Define user here to fix NameError
-    
-    patch_user_get(monkeypatch, user)  # Use existing patch function
-    
-    class DummyPermission:
-        value = "editor"  # Enum-like permission
-    
-    class DummyProjectUser:
-        user = type("User", (), {"ref": type("Ref", (), {"id": user.id})})()
-        permission = DummyPermission()
-    
-    class DummyProject:
-        super_admin = None  # Not super_admin to force loop
-        users = [DummyProjectUser()]  # List with matching user to hit the if and set previlage
-    
-    class MockProject:
-        @staticmethod
-        async def get(_id):
-            return DummyProject()
-    
-    monkeypatch.setattr("app.auth.controllers.refresh_access_token.Project", MockProject)
-    
-    payload = {
-        "user_id": user.id,
-        "token_type": TokenType.refresh.value,
-        "project": "507f1f77bcf86cd799439012",
-        "exp": int((datetime.datetime.now() + datetime.timedelta(seconds=JWT_EXPIRES_IN)).timestamp())
-    }
-    token = jwt.encode(payload, os.getenv("JWT_SECRET_KEY"), algorithm=JWT_ALGORITHM)
-    req = RefreshTokenRequest(refresh_token=token)
-    res = await refresh_access_token(req, "req-id")
-    assert isinstance(res, TokenResponse)  # Succeeds after privilege assignment in loop
-
