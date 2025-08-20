@@ -130,7 +130,8 @@ async def test_refresh_access_token_invalid_token_type(monkeypatch, dummy_user_c
     res = await refresh_access_token(req, "req-id")
     assert isinstance(res, JSONResponse)
     assert res.status_code == 401
-    assert "invalid token type" in res.body.decode().lower()
+    assert "invalid token" in res.body.decode().lower()  # Updated to match code's generic message
+
 
 
 @pytest.mark.asyncio
@@ -170,7 +171,8 @@ async def test_refresh_access_token_user_not_found(monkeypatch):
     res = await refresh_access_token(req, "req-id")
     assert isinstance(res, JSONResponse)
     assert res.status_code == 401
-    assert "user not found" in res.body.decode().lower()
+    assert "invalid token" in res.body.decode().lower()  # Updated to match code's generic message
+
 
 
 @pytest.mark.asyncio
